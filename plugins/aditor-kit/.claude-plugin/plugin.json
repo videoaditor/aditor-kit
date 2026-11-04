@@ -1,0 +1,7 @@
+{
+  "name": "aditor-kit",
+  "version": "1.0.0",
+  "description": "Sub-agent orchestration, nightshifts, a promise loop, and auto-learning: every correction becomes a rule in CLAUDE.md.",
+  "author": { "name": "Aditor" },
+  "license": "MIT"
+}

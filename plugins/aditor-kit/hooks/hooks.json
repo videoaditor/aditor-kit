@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/learn.py\" capture" } ] }
+    ],
+    "Stop": [
+      { "hooks": [
+        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/learn.py\" stop" },
+        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/promise_loop_stop.py\"" }
+      ] }
+    ]
+  }
+}

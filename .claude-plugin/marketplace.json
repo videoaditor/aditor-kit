@@ -1,0 +1,11 @@
+{
+  "name": "aditor",
+  "owner": { "name": "Aditor" },
+  "plugins": [
+    {
+      "name": "aditor-kit",
+      "source": "./plugins/aditor-kit",
+      "description": "Sub-agent orchestration, nightshifts, a promise loop, and auto-learning: every correction becomes a rule in CLAUDE.md."
+    }
+  ]
+}

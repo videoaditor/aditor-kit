@@ -14,7 +14,7 @@ What we run every day at Aditor, in one install.
 Open Claude Code and paste these two lines, one after the other:
 
 ```
-/plugin marketplace add aditor/aditor-kit
+/plugin marketplace add videoaditor/aditor-kit
 /plugin install aditor-kit@aditor
 ```
 

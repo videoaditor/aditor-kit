@@ -11,7 +11,7 @@ Script next to this file: `<base dir>/br.py`. Works on a job from `rough-cut` (`
 2. **Place clips on words.** Read `$JOB/rough/transcript.txt`. Write `$JOB/edl.json`:
    `[{"clip": "03", "from": 12, "to": 18, "src_in": 0.0}]` — the clip covers words 12–18; `src_in` = seconds into the clip.
    - The clip must show what is said in that span (pain on the problem, product on its name, result on the promise).
-   - 1–3 s per insert; something new every 2–3 s; aim for 40–70 % coverage. Keep the face on the hook's first words and on the call to action.
+   - 1–2 s per insert, something new every ~1.5 s, 60–70 % coverage. A sentence of 2 s+ gets two clips, not one (Alan 07.11.: "cut frequency higher"). Keep the face on the hook's first words and on the call to action.
    - A calm clip (person barely moving) longer than ~2.5 s fails reel-qc's static check: split the span over two clips.
    - No clip twice in a row; no overlaps; a clip must be at least as long as its span (the script refuses otherwise).
 3. **Render:** `python3 <base dir>/br.py render $JOB/rough.mp4 $JOB` → `$JOB/broll.mp4`. Full-frame, voice copied bit-for-bit; it fails loudly on sync drift.

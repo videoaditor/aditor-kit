@@ -50,6 +50,41 @@ struct Cap: Decodable {
     let shadow: Bool?                                   // soft drop shadow
     let box: String?; let radius: Double?               // rounded box behind each line (TikTok text bubble)
     let hl: [Int]?; let hlColor: String?; let hlMode: String?   // highlighted word indices, "box" or "text"
+    let reply: String?                                  // TikTok comment-reply sticker: commenter name, text = comment
+}
+
+func drawReply(_ c: Cap, _ name: String) -> CGImage {
+    let W = c.w, H = c.h, fs = CGFloat(c.size)
+    let cg = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    cg.translateBy(x: 0, y: CGFloat(H)); cg.scaleBy(x: 1, y: -1)
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(cgContext: cg, flipped: true)
+    let small: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: fs * 0.52, weight: .regular), .foregroundColor: hex("#8A8A8E")]
+    let big: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: fs, weight: .bold), .foregroundColor: hex("#161616")]
+    let head = NSAttributedString(string: "Reply to \(name)'s comment", attributes: small)
+    let maxText = CGFloat(W) - fs * 3.6
+    let body = NSAttributedString(string: c.text, attributes: big)
+    let bb = body.boundingRect(with: NSSize(width: maxText, height: 2000), options: [.usesLineFragmentOrigin])
+    let hb = head.boundingRect(with: NSSize(width: maxText, height: 200), options: [.usesLineFragmentOrigin])
+    let av = fs * 1.5, padX = fs * 0.55, padY = fs * 0.45
+    let cardW = padX * 2 + av + fs * 0.4 + max(bb.width, hb.width), cardH = padY * 2 + hb.height + bb.height + fs * 0.1
+    let card = NSRect(x: (CGFloat(W) - cardW) / 2, y: (CGFloat(H) - cardH) / 2, width: cardW, height: cardH)
+    let sh = NSShadow(); sh.shadowColor = NSColor.black.withAlphaComponent(0.25); sh.shadowBlurRadius = fs * 0.4
+    sh.set(); NSColor.white.setFill(); NSBezierPath(roundedRect: card, xRadius: fs * 0.35, yRadius: fs * 0.35).fill()
+    NSShadow().set()
+    hex("#C9C9CE").setFill()
+    NSBezierPath(ovalIn: NSRect(x: card.minX + padX, y: card.minY + padY, width: av, height: av)).fill()
+    let tx = card.minX + padX + av + fs * 0.4
+    head.draw(with: NSRect(x: tx, y: card.minY + padY, width: maxText, height: hb.height), options: [.usesLineFragmentOrigin])
+    body.draw(with: NSRect(x: tx, y: card.minY + padY + hb.height + fs * 0.1, width: maxText, height: bb.height), options: [.usesLineFragmentOrigin])
+    NSGraphicsContext.restoreGraphicsState()
+    return cg.makeImage()!
+}
+
+func savePNG(_ img: CGImage, _ path: String) {
+    let dest = CGImageDestinationCreateWithURL(URL(fileURLWithPath: path) as CFURL, "public.png" as CFString, 1, nil)!
+    CGImageDestinationAddImage(dest, img, nil); CGImageDestinationFinalize(dest)
 }
 
 func hex(_ s: String) -> NSColor {
@@ -68,6 +103,7 @@ func captions(_ jsonPath: String, _ dir: String) {
     guard let data = FileManager.default.contents(atPath: jsonPath),
           let caps = try? JSONDecoder().decode([Cap].self, from: data) else { fail("bad \(jsonPath)") }
     for c in caps {
+        if let name = c.reply { savePNG(drawReply(c, name), dir + "/" + c.file); continue }
         let W = c.w, H = c.h, pad: CGFloat = 40
         let para = NSMutableParagraphStyle(); para.alignment = .center; para.lineHeightMultiple = 0.95
         let base: [NSAttributedString.Key: Any] = [.font: font(c.font, c.size), .foregroundColor: hex(c.color), .paragraphStyle: para]
@@ -133,8 +169,7 @@ func captions(_ jsonPath: String, _ dir: String) {
         }
         lm.drawGlyphs(forGlyphRange: all, at: origin)
         NSGraphicsContext.restoreGraphicsState()
-        let dest = CGImageDestinationCreateWithURL(URL(fileURLWithPath: dir + "/" + c.file) as CFURL, "public.png" as CFString, 1, nil)!
-        CGImageDestinationAddImage(dest, cg.makeImage()!, nil); CGImageDestinationFinalize(dest)
+        savePNG(cg.makeImage()!, dir + "/" + c.file)
     }
 }
 

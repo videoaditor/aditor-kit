@@ -2,7 +2,7 @@
 """Compose a talking head: b-roll in four layouts, captions, SFX. One ffmpeg render.
 
   br.py frames BROLL_DIR JOBDIR        -> JOBDIR/broll/<id>.jpg (3-frame strip per clip) + broll.json
-  br.py render TH.mp4 JOBDIR [--captions native|boxed|highlight|editorial|pop|off] [--accent "#FFD60A"] [--hook "text"]
+  br.py render TH.mp4 JOBDIR [--captions ugc|ugc-key|word|off] [--accent "#FFE14D"]
         reads JOBDIR/edl.json (+ sfx.json), JOBDIR/rough/words.json -> JOBDIR/final.mp4
 
 edl.json  [{"from": 12, "to": 18, "layout": "full", "clip": "03", "src_in": 0.0}, ...]
@@ -10,6 +10,8 @@ edl.json  [{"from": 12, "to": 18, "layout": "full", "clip": "03", "src_in": 0.0}
                   cutout (speaker cut out over b-roll) | compare (clip top, clip2 bottom)
           cutout options: "place": auto|left|right|center (auto = away from the b-roll's focal point),
                           "scale": 0.4-1.0 (default 0.62; 1.0 = full size, background swap)
+overlays.json [{"type": "bubble", "text": "3 bottles in and I'm the same size as in my 20s", "from": 0, "to": 14,
+                "y": 0.2, "color": "#FFFFFF"}, {"type": "comment", "name": "Danielle", "text": "does it mess with your gums?"}]
 sfx.json  [{"word": 12, "file": "Whooshes/Swoosh_04.wav", "db": -12}, ...]  (file under $EDIT_SFX)
 """
 from __future__ import annotations
@@ -104,24 +106,21 @@ def plan(edl: list[dict], words: list[dict], inv: dict, th_dur: float) -> tuple[
     return shots, notes
 
 
-# Caption looks reverse-engineered from 39 long-running (189 d) winning ads, 5 niches (Foreplay, 2026-11-07).
+# Caption looks reverse-engineered from the longest-running UGC ads of DR brands (Bioma 494 d, Primal Queen 589 d,
+# Javy 711 d, Obvi, Arrae, Snow, Cymbiotika; Foreplay 2026-11-07). Native and small - never coach-style blocks.
 CAPTION_STYLES = {
-    # TikTok-native: sentence case, semibold, soft shadow, 4-7 words. UGC creators (beauty, home, fashion).
-    "native": {"font": "SFProText-Semibold", "size": 54, "color": "#FFFFFF", "shadow": True,
-               "words": 7, "chars": 32, "upper": False, "y": 0.70},
-    # TikTok text bubble: black on white rounded box per line. Native UGC, hook headers.
-    "boxed": {"font": "SFProText-Semibold", "size": 50, "color": "#111111", "box": "#FFFFFF", "radius": 14,
-              "words": 6, "chars": 28, "upper": False, "y": 0.70},
-    # DR highlight: caps, heavy, thin outline, one key word on a colour block. Health, supplements, telehealth.
-    "highlight": {"font": "SFProDisplay-Heavy", "size": 72, "color": "#FFFFFF", "stroke": "#000000", "strokeW": 6,
-                  "shadow": True, "hlColor": "#7B2CFF", "hlMode": "box", "words": 4, "chars": 18, "upper": True, "y": 0.68},
-    # Editorial: serif, sentence case, soft shadow. Premium, doctors, testimonials.
-    "editorial": {"font": "serif", "size": 60, "color": "#FFFFFF", "shadow": True,
-                  "words": 6, "chars": 28, "upper": False, "y": 0.64},
-    # Pop: one word, big, shadow instead of outline. Fast montage passages.
-    "pop": {"font": "SFProDisplay-Black", "size": 104, "color": "#FFFFFF", "shadow": True,
-            "words": 1, "chars": 99, "upper": True, "y": 0.58},
+    # TikTok auto-caption look: small white sentence case, soft shadow, whole phrase. The default.
+    "ugc": {"font": "SFProText-Semibold", "size": 46, "color": "#FFFFFF", "shadow": True, "stroke": "#000000", "strokeW": 3,
+            "words": 7, "chars": 34, "upper": False, "y": 0.70},
+    # Same, one key word in colour (no block): "I think it was like *three* pounds" (Obvi).
+    "ugc-key": {"font": "SFProText-Semibold", "size": 50, "color": "#FFFFFF", "shadow": True, "stroke": "#000000", "strokeW": 3,
+                "hlColor": "#FFE14D", "hlMode": "text", "words": 5, "chars": 26, "upper": False, "y": 0.70},
+    # One word at a time, mid-size caps with shadow (Bioma "DITCHING / AND / THE", Primal Queen). Fast passages.
+    "word": {"font": "SFProDisplay-Bold", "size": 66, "color": "#FFFFFF", "shadow": True, "stroke": "#000000", "strokeW": 4,
+             "words": 1, "chars": 99, "upper": True, "y": 0.62},
 }
+# Text overlays (overlays.json): the layer DR brands put their claims, offers and hooks on.
+BUBBLE = {"font": "SFProText-Semibold", "size": 46, "color": "#111111", "box": "#FFFFFF", "radius": 12}
 STOP = set("a an the and or but so to of in on at for with from by is are was were be been it its it's this that "
            "these those you your i i'm we our they them he she his her my me not just can can't will".split())
 
@@ -197,7 +196,7 @@ def make_mask(th: str, info: dict, job: Path) -> Path:
     return mask
 
 
-def cmd_render(th: str, jobdir: str, style: str = "highlight", accent: str | None = None, hook: str | None = None) -> None:
+def cmd_render(th: str, jobdir: str, style: str = "ugc", accent: str | None = None) -> None:
     job = Path(jobdir)
     info = probe(th)
     words = json.loads((job / "rough/words.json").read_text())
@@ -270,12 +269,6 @@ def cmd_render(th: str, jobdir: str, style: str = "highlight", accent: str | Non
         spec = [{"text": g["text"], "file": f"c{k:03d}.png", **look, "hl": g["hl"] if "hlColor" in cs else []}
                 for k, g in enumerate(groups)]
         spec.append({"text": "", "file": "blank.png", **look})
-        if hook:
-            if len(hook) > 26 and "\n" not in hook:          # two balanced lines, no orphan word
-                cut = min((i for i, ch in enumerate(hook) if ch == " "), key=lambda i: abs(i - len(hook) / 2))
-                hook = hook[:cut] + "\n" + hook[cut + 1:]
-            spec.append({**CAPTION_STYLES["boxed"], "text": hook, "file": "hook.png", "w": W - 120, "h": 360,
-                         "size": 50 if vertical else 40})
         (cdir / "captions.json").write_text(json.dumps(spec))
         sh([kit(), "captions", str(cdir / "captions.json"), str(cdir)])
         lines, t = ["ffconcat version 1.0"], 0.0
@@ -294,10 +287,29 @@ def cmd_render(th: str, jobdir: str, style: str = "highlight", accent: str | Non
              if vertical else f"{int(H * 0.8)}-h/2")
         fc.append(f"[{ci}:v]fps={fps},format=rgba[cap];[{base}][cap]overlay=(W-w)/2:'{y}':eof_action=pass[ocap]")
         base = "ocap"
-        if hook:   # persistent hook line at the top, like "Every Man Over 40 Needs to Hear This"
-            hi = add(str(cdir / "hook.png"), "-loop", "1")
-            fc.append(f"[{hi}:v]format=rgba[hk];[{base}][hk]overlay=(W-w)/2:{int(H * 0.13)}-h/2:shortest=1[ohk]")
-            base = "ohk"
+
+    overlays = json.loads((job / "overlays.json").read_text()) if (job / "overlays.json").exists() else []
+    if overlays:
+        odir = job / "overlays"
+        odir.mkdir(exist_ok=True)
+        spec = []
+        for k, o in enumerate(overlays):
+            box = o.get("color", "#FFFFFF")
+            k_light = sum(int(box.lstrip("#")[i:i + 2], 16) * f for i, f in ((0, .2126), (2, .7152), (4, .0722))) > 150
+            look = {**BUBBLE, "box": box, "color": "#111111" if k_light else "#FFFFFF", "w": W - 120, "h": 420,
+                    "text": o["text"], "file": f"o{k:02d}.png"}
+            if o.get("type") == "comment":
+                look.update({"reply": o.get("name", "Sarah"), "size": 40})
+            spec.append(look)
+        (odir / "overlays.json").write_text(json.dumps(spec))
+        sh([kit(), "captions", str(odir / "overlays.json"), str(odir)])
+        for k, o in enumerate(overlays):
+            t0 = words[o["from"]]["t"] if "from" in o else 0.0
+            t1 = (words[o["to"] + 1]["t"] if o["to"] + 1 < len(words) else info["dur"]) if "to" in o else info["dur"]
+            oi = add(str(odir / f"o{k:02d}.png"), "-loop", "1")
+            fc.append(f"[{oi}:v]format=rgba[ov{k}];[{base}][ov{k}]overlay=(W-w)/2:{int(H * float(o.get('y', 0.2)))}-h/2:"
+                      f"shortest=1:enable='between(t,{t0:.3f},{t1:.3f})'[oo{k}]")
+            base = f"oo{k}"
 
     sfx = json.loads((job / "sfx.json").read_text()) if (job / "sfx.json").exists() else []
     amap = ["-map", "0:a", "-c:a", "copy"]
@@ -325,7 +337,7 @@ def cmd_render(th: str, jobdir: str, style: str = "highlight", accent: str | Non
     cover = sum(s["dur"] for s in shots) / info["dur"] * 100
     lay = ", ".join(f"{n} {l}" for l in sorted(LAYOUTS) if (n := sum(s["layout"] == l for s in shots)))
     print(f"{len(shots)} shots ({lay or 'none'}), {cover:.0f}% covered, {len(sfx)} sfx, "
-          f"captions {style}{' + hook' if hook else ''}, drift {drift * 1000:.0f} ms -> {out}")
+          f"captions {style}, {len(overlays)} overlays, drift {drift * 1000:.0f} ms -> {out}")
     for s in shots:
         if s["layout"] == "cutout":
             print(f"  cutout words {s['words']}: speaker {s['place']}")
@@ -339,9 +351,9 @@ if __name__ == "__main__":
         cmd_frames(a[1], a[2])
     elif len(a) >= 3 and a[0] == "render":
         opt = dict(zip(a[3::2], a[4::2]))
-        style = opt.get("--captions", "highlight")
+        style = opt.get("--captions", "ugc")
         if style not in CAPTION_STYLES and style != "off":
             raise SystemExit(f"--captions {style}: one of {', '.join(CAPTION_STYLES)}, off")
-        cmd_render(a[1], a[2], style, opt.get("--accent"), opt.get("--hook"))
+        cmd_render(a[1], a[2], style, opt.get("--accent"))
     else:
         raise SystemExit(__doc__)

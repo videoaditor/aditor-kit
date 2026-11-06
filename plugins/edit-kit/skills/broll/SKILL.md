@@ -33,21 +33,26 @@ Rhythm (house rules): every shot **at least 1 s** (the script refuses shorter on
 ## 4. Sound effects (optional): `$JOB/sfx.json`
 `[{"word": 2, "file": "Suspense:Hits/Sub Stress Boom sfx.wav", "db": -10}]`, files under `~/aditor-edits/sfx/` (one folder per kind; list it to see what exists). Hits/booms on pain words, whooshes on layout changes, pops on product or price reveals, risers into the payoff. Sparse: 5–8 per 45 s. The voice keeps its timing; the mix is normalised to −14 LUFS.
 
-## 5. Captions: pick the look by niche
-Reverse-engineered from 39 long-running winning ads in 5 niches. `--captions <style>`:
+## 5. Captions and text overlays: native, never coach-style
+Reverse-engineered from the longest-running UGC of DR brands (Bioma, Primal Queen, Javy, Obvi, Arrae, Snow, Cymbiotika). Their captions are small and native; claims, offers and hooks sit in TikTok bubbles. No big caps-with-colour-block captions.
 
-| style | look | default for |
+`--captions <style>`:
+| style | look | when |
 |---|---|---|
-| `highlight` | CAPS, heavy, thin outline, one key word on a colour block | health, supplements, telehealth/medical (DR) |
-| `native` | TikTok-native, sentence case, semibold, soft shadow, 4–7 words | beauty, home, fashion, creator UGC |
-| `boxed` | black on white bubble per line | native UGC; also the `--hook` line |
-| `editorial` | serif, sentence case | premium brands, doctors, testimonials |
-| `pop` | one big word, shadow | fast montage passages |
+| `ugc` (default) | TikTok auto-caption: small white sentence case, whole phrase | almost always |
+| `ugc-key` | same, one key word in yellow text (no block) | when a number/pain word should land |
+| `word` | one word at a time, mid-size caps, shadow | short fast passages only |
 
-`--accent "#FFD60A"` sets the highlight colour (brand colour; yellow and purple are the most common in winners). Mark the key word yourself with `"hl": true` on a word in `rough/words.json` (pain word, number, product name); otherwise a number or the longest meaningful word is taken. `--hook "Every Man Over 40 Needs to Hear This"` pins the hook as a boxed line at the top for the whole ad (common in health winners). Captions sit on the seam in split/compare and on the chest of a small cutout.
+Key word: put `"hl": true` on it in `rough/words.json` (number, pain word, product name); `--accent` changes the colour.
+
+Text overlays: `$JOB/overlays.json`, timed on words, default top (`y` 0.18–0.2):
+- `{"type": "comment", "name": "Linda", "text": "does it actually help bone-on-bone knees?", "from": 0, "to": 15}` — TikTok comment-reply sticker as the hook.
+- `{"type": "bubble", "text": "3 bottles in and I'm the same size as in my 20s", "from": 16, "to": 26}` — claim / result in a white bubble.
+- `{"type": "bubble", "text": "25% off today + free shipping", "color": "#E5322D", "from": 118, "to": 129}` — offer or instruction in a red (or brand-colour) bubble.
+Short, in the creator's voice, max ~8 words. Use the script's on-screen text if it has some.
 
 ## 6. Render and look
-`python3 <base dir>/br.py render $JOB/rough.mp4 $JOB --captions highlight` → `$JOB/final.mp4`, 1080×1920 (or 1920×1080) at 30 fps.
+`python3 <base dir>/br.py render $JOB/rough.mp4 $JOB --captions ugc` → `$JOB/final.mp4`, 1080×1920 (or 1920×1080) at 30 fps.
 Then take frames at 4–6 shot times (`ffmpeg -ss T -i $JOB/final.mp4 -frames:v 1 -vf scale=-2:640 /tmp/x.jpg`) and Read them. Speaker covering the b-roll's subject, caption over a face, clip not matching its words → change edl.json, render again.
 
 ## 7. Hand-off

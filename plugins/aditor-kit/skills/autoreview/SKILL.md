@@ -15,7 +15,7 @@ The user types "Pair with AutoReview: CODE". The code comes from the brand's pro
 python3 <base dir>/ar.py pair CODE
 ```
 
-It stores the key in the macOS Keychain (`aditor-autoreview-agent`) and prints the project (= brand) it delivers to. Never print, echo or write the key anywhere. `ar.py whoami` shows the project later. Expired or used code: ask for a fresh one.
+It stores the key in the macOS Keychain (`aditor-autoreview-agent`), prints the project (= brand) it delivers to, and lists any tool `reel-qc` still needs with the exact install line. Walk the user through those lines (`ar.py check` re-checks). Never print, echo or write the key anywhere. `ar.py whoami` shows the project later. Expired or used code: ask for a fresh one.
 
 ## 2. Deliver
 

@@ -55,3 +55,19 @@ class StoreKey(unittest.TestCase):
         self.assertEqual(argv[0], ["security", "-i"])
         self.assertIn('-w "ara_secret"', kw["input"])
         self.assertIn("-s aditor-autoreview-agent", kw["input"])
+
+
+class MissingTools(unittest.TestCase):
+    def test_lists_install_lines_and_homebrew_first_when_absent(self):
+        import ar
+        from unittest import mock
+        with mock.patch.object(ar.shutil, "which", return_value=None), mock.patch.dict(os.environ, {"REEL_QC_WHISPER_MODEL": "/nope/m.bin"}):
+            todo = ar.missing_tools()
+        self.assertEqual(todo[0][0], "Homebrew")
+        self.assertIn("brew install ffmpeg", [c for _, c in todo])
+
+    def test_empty_when_everything_is_there(self):
+        import ar
+        from unittest import mock
+        with mock.patch.object(ar.shutil, "which", return_value="/bin/x"), mock.patch.object(ar.os.path, "isfile", return_value=True):
+            self.assertEqual(ar.missing_tools(), [])

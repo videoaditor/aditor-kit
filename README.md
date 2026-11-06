@@ -28,3 +28,25 @@ Needs `python3` (preinstalled on every Mac). Orchestrate works best with the `su
 
 - Promise loop: only runs in folders that have a `PROMISES.md`.
 - Everything: `/plugin disable aditor-kit@aditor`.
+
+---
+
+# Agentic Editing Kit (`edit-kit`)
+
+For video editors. Drop raw footage into Claude Code, get a tight rough cut with b-roll on the right words, checked and ready for review. No API keys: Claude makes the editing calls, Whisper runs on your Mac.
+
+| Piece | What it does |
+|---|---|
+| `edit-setup` | Say "set up my workspace". Installs ffmpeg, whisper-cpp and the speech model, creates `~/aditor-edits/` with the house editing rules and an `sfx/` folder for your sound pack, checks the Gen connection. |
+| `rough-cut` | Drag in a raw talking head, say "cut this". Claude reads the word-level transcript, removes false starts, stutters, retakes and empty sentences, shrinks every pause, speeds up 1.15× (lessons 1.1×), normalises to −14 LUFS, then re-transcribes the result to prove nothing doubled is left. |
+| `broll` | Drag in a folder of clips (and the script), say "finish it". Claude looks at every clip and builds the edit on the words: full b-roll, split screen, before/after, the speaker cut out over b-roll and placed clear of what matters in the shot. Adds captions (SF Pro, proofread) and sound effects from your own SFX folder. Every shot ≥ 1 s, 1080×1920/30 fps, −14 LUFS. |
+
+QC (`reel-qc`) and delivery (`autoreview`) come from `aditor-kit`, so install both:
+
+```
+/plugin marketplace add videoaditor/aditor-kit
+/plugin install aditor-kit@aditor
+/plugin install edit-kit@aditor
+```
+
+Restart Claude Code, then say **"set up my workspace"**. macOS only for now. Homebrew must be installed (the setup tells you the one command if it isn't).

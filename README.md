@@ -1,6 +1,6 @@
-# Aditor Kit for Claude Code
+# AI Builder Starter Kit for Claude Code
 
-What we run every day at Aditor, in one install.
+For people who build with AI: what we run every day at Aditor, in one install. Claude plans, builds in parallel, keeps working while you're away, learns from every correction, and hands finished work to a human reviewer.
 
 | Piece | What it does |
 |---|---|

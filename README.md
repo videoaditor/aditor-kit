@@ -7,6 +7,8 @@ What we run every day at Aditor, in one install.
 | `/orchestrate` | One session becomes the lead. It cuts a spec into lanes, runs sub-agents in parallel (build → review → fix → verify per task) and hands you one PR. |
 | `/nightshift` | Builds the roadmap items marked ready while you're away. Morning: one PR you can judge in five minutes. |
 | `/promise-loop` | Write goals into `PROMISES.md`. The session won't stop until every one is done with proof. |
+| `autoreview` | Hands finished videos to a human on AutoReview and fixes them until approved. Type `Pair with AutoReview: CODE` once (code from the brand's project); after that every upload lands with that brand, the key sits in the macOS Keychain, and the session wakes up by itself when the reviewer presses Send. |
+| `reel-qc` | Checks a vertical reel before it goes out: format, loudness, black frames, frozen stretches, lip-sync, transcript vs script, contact sheet. A FAIL blocks the upload. Needs `ffmpeg`; the script check also `whisper-cpp`. |
 | Auto-learn | Whenever you correct Claude ("no, never…", "always…"), it writes the rule into `CLAUDE.md` before it stops. Every mistake becomes a rule, without you doing anything. |
 
 ## Install

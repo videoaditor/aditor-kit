@@ -2,7 +2,7 @@
 """Compose a talking head: b-roll in four layouts, captions, SFX. One ffmpeg render.
 
   br.py frames BROLL_DIR JOBDIR        -> JOBDIR/broll/<id>.jpg (3-frame strip per clip) + broll.json
-  br.py render TH.mp4 JOBDIR [--no-captions]
+  br.py render TH.mp4 JOBDIR [--captions native|boxed|highlight|editorial|pop|off] [--accent "#FFD60A"] [--hook "text"]
         reads JOBDIR/edl.json (+ sfx.json), JOBDIR/rough/words.json -> JOBDIR/final.mp4
 
 edl.json  [{"from": 12, "to": 18, "layout": "full", "clip": "03", "src_in": 0.0}, ...]
@@ -104,11 +104,35 @@ def plan(edl: list[dict], words: list[dict], inv: dict, th_dur: float) -> tuple[
     return shots, notes
 
 
-def caption_groups(words: list[dict], th_dur: float) -> list[dict]:
-    """1-3 words per caption, max ~16 characters, break after punctuation."""
+# Caption looks reverse-engineered from 39 long-running (189 d) winning ads, 5 niches (Foreplay, 2026-11-07).
+CAPTION_STYLES = {
+    # TikTok-native: sentence case, semibold, soft shadow, 4-7 words. UGC creators (beauty, home, fashion).
+    "native": {"font": "SFProText-Semibold", "size": 54, "color": "#FFFFFF", "shadow": True,
+               "words": 7, "chars": 32, "upper": False, "y": 0.70},
+    # TikTok text bubble: black on white rounded box per line. Native UGC, hook headers.
+    "boxed": {"font": "SFProText-Semibold", "size": 50, "color": "#111111", "box": "#FFFFFF", "radius": 14,
+              "words": 6, "chars": 28, "upper": False, "y": 0.70},
+    # DR highlight: caps, heavy, thin outline, one key word on a colour block. Health, supplements, telehealth.
+    "highlight": {"font": "SFProDisplay-Heavy", "size": 72, "color": "#FFFFFF", "stroke": "#000000", "strokeW": 6,
+                  "shadow": True, "hlColor": "#7B2CFF", "hlMode": "box", "words": 4, "chars": 18, "upper": True, "y": 0.68},
+    # Editorial: serif, sentence case, soft shadow. Premium, doctors, testimonials.
+    "editorial": {"font": "serif", "size": 60, "color": "#FFFFFF", "shadow": True,
+                  "words": 6, "chars": 28, "upper": False, "y": 0.64},
+    # Pop: one word, big, shadow instead of outline. Fast montage passages.
+    "pop": {"font": "SFProDisplay-Black", "size": 104, "color": "#FFFFFF", "shadow": True,
+            "words": 1, "chars": 99, "upper": True, "y": 0.58},
+}
+STOP = set("a an the and or but so to of in on at for with from by is are was were be been it its it's this that "
+           "these those you your i i'm we our they them he she his her my me not just can can't will".split())
+
+
+def caption_groups(words: list[dict], th_dur: float, max_words: int = 3, max_chars: int = 16,
+                   upper: bool = True) -> list[dict]:
+    """Group words into captions (break after punctuation); pick one key word per caption for highlights:
+    a word Claude flagged with "hl": true, else a number, else the longest non-filler word."""
     groups, cur = [], []
     for w in words:
-        if cur and (len(cur) == 3 or len(" ".join(x["w"] for x in cur + [w])) > 16):
+        if cur and (len(cur) == max_words or len(" ".join(x["w"] for x in cur + [w])) > max_chars):
             groups.append(cur)
             cur = []
         cur.append(w)
@@ -119,7 +143,16 @@ def caption_groups(words: list[dict], th_dur: float) -> list[dict]:
     out = []
     for k, g in enumerate(groups):
         t1 = groups[k + 1][0]["t"] if k + 1 < len(groups) else min(th_dur, g[-1]["t"] + g[-1]["d"] + 0.4)
-        out.append({"text": re.sub(r"[.,;:]+$", "", " ".join(x["w"] for x in g)).upper(), "t0": g[0]["t"], "t1": t1})
+        text = re.sub(r"[.,;:]+$", "", " ".join(x["w"] for x in g))
+        bare = [re.sub(r"[^\w%$']", "", x["w"]).lower() for x in g]
+        hl = next((n for n, x in enumerate(g) if x.get("hl")), None)
+        if hl is None:
+            hl = next((n for n, b in enumerate(bare) if re.search(r"\d", b)), None)
+        if hl is None:
+            cands = [(len(b), n) for n, b in enumerate(bare) if b not in STOP and len(b) >= 4]
+            hl = max(cands)[1] if cands else None
+        out.append({"text": text.upper() if upper else text, "t0": g[0]["t"], "t1": t1,
+                    "hl": [] if hl is None else [hl]})
     return out
 
 
@@ -164,7 +197,7 @@ def make_mask(th: str, info: dict, job: Path) -> Path:
     return mask
 
 
-def cmd_render(th: str, jobdir: str, captions: bool = True) -> None:
+def cmd_render(th: str, jobdir: str, style: str = "highlight", accent: str | None = None, hook: str | None = None) -> None:
     job = Path(jobdir)
     info = probe(th)
     words = json.loads((job / "rough/words.json").read_text())
@@ -227,13 +260,22 @@ def cmd_render(th: str, jobdir: str, captions: bool = True) -> None:
         fc.append(f"[{base}][p{k}]overlay=0:0:enable='between(t,{a:.3f},{a + d:.3f})':eof_action=pass[o{k}]")
         base = f"o{k}"
 
-    if captions and words:
+    if style != "off" and words:
+        cs = dict(CAPTION_STYLES[style], **({"hlColor": accent} if accent else {}))
         cdir = job / "captions"
         cdir.mkdir(exist_ok=True)
-        groups = caption_groups(words, info["dur"])
-        size = {"w": W - 80, "h": 320, "size": 88 if vertical else 72}
-        spec = [{"text": g["text"], "file": f"c{k:03d}.png", **size} for k, g in enumerate(groups)]
-        spec.append({"text": "", "file": "blank.png", **size})
+        groups = caption_groups(words, info["dur"], cs["words"], cs["chars"], cs["upper"])
+        look = {k: v for k, v in cs.items() if k not in ("words", "chars", "upper", "y")}
+        look.update({"w": W - 80, "h": 360, "size": cs["size"] if vertical else cs["size"] * 0.8})
+        spec = [{"text": g["text"], "file": f"c{k:03d}.png", **look, "hl": g["hl"] if "hlColor" in cs else []}
+                for k, g in enumerate(groups)]
+        spec.append({"text": "", "file": "blank.png", **look})
+        if hook:
+            if len(hook) > 26 and "\n" not in hook:          # two balanced lines, no orphan word
+                cut = min((i for i, ch in enumerate(hook) if ch == " "), key=lambda i: abs(i - len(hook) / 2))
+                hook = hook[:cut] + "\n" + hook[cut + 1:]
+            spec.append({**CAPTION_STYLES["boxed"], "text": hook, "file": "hook.png", "w": W - 120, "h": 360,
+                         "size": 50 if vertical else 40})
         (cdir / "captions.json").write_text(json.dumps(spec))
         sh([kit(), "captions", str(cdir / "captions.json"), str(cdir)])
         lines, t = ["ffconcat version 1.0"], 0.0
@@ -245,13 +287,17 @@ def cmd_render(th: str, jobdir: str, captions: bool = True) -> None:
         lines += ["file blank.png", f"duration {max(0.1, info['dur'] - t):.3f}", "file blank.png"]
         (cdir / "track.ffconcat").write_text("\n".join(lines) + "\n")
         ci = add(str(cdir / "track.ffconcat"), "-f", "concat", "-safe", "0")
-        # on the seam in split/compare, on the chest of a small cutout (never over its face), lower third otherwise
+        # on the seam in split/compare, on the chest of a small cutout (never over its face), style height otherwise
         seam = [(s["at"], s["end"]) for s in shots if s["layout"] in ("split", "compare")]
         chest = [(s["at"], s["end"]) for s in shots if s["layout"] == "cutout" and float(s["scale"]) < 0.99]
-        y = (f"if({between(seam)},{H // 2}-h/2,if({between(chest)},{int(H * 0.86)}-h/2,{int(H * 0.66)}-h/2))"
+        y = (f"if({between(seam)},{H // 2}-h/2,if({between(chest)},{int(H * 0.86)}-h/2,{int(H * cs['y'])}-h/2))"
              if vertical else f"{int(H * 0.8)}-h/2")
         fc.append(f"[{ci}:v]fps={fps},format=rgba[cap];[{base}][cap]overlay=(W-w)/2:'{y}':eof_action=pass[ocap]")
         base = "ocap"
+        if hook:   # persistent hook line at the top, like "Every Man Over 40 Needs to Hear This"
+            hi = add(str(cdir / "hook.png"), "-loop", "1")
+            fc.append(f"[{hi}:v]format=rgba[hk];[{base}][hk]overlay=(W-w)/2:{int(H * 0.13)}-h/2:shortest=1[ohk]")
+            base = "ohk"
 
     sfx = json.loads((job / "sfx.json").read_text()) if (job / "sfx.json").exists() else []
     amap = ["-map", "0:a", "-c:a", "copy"]
@@ -279,7 +325,7 @@ def cmd_render(th: str, jobdir: str, captions: bool = True) -> None:
     cover = sum(s["dur"] for s in shots) / info["dur"] * 100
     lay = ", ".join(f"{n} {l}" for l in sorted(LAYOUTS) if (n := sum(s["layout"] == l for s in shots)))
     print(f"{len(shots)} shots ({lay or 'none'}), {cover:.0f}% covered, {len(sfx)} sfx, "
-          f"captions {'on' if captions else 'off'}, drift {drift * 1000:.0f} ms -> {out}")
+          f"captions {style}{' + hook' if hook else ''}, drift {drift * 1000:.0f} ms -> {out}")
     for s in shots:
         if s["layout"] == "cutout":
             print(f"  cutout words {s['words']}: speaker {s['place']}")
@@ -292,6 +338,10 @@ if __name__ == "__main__":
     if len(a) >= 3 and a[0] == "frames":
         cmd_frames(a[1], a[2])
     elif len(a) >= 3 and a[0] == "render":
-        cmd_render(a[1], a[2], captions="--no-captions" not in a)
+        opt = dict(zip(a[3::2], a[4::2]))
+        style = opt.get("--captions", "highlight")
+        if style not in CAPTION_STYLES and style != "off":
+            raise SystemExit(f"--captions {style}: one of {', '.join(CAPTION_STYLES)}, off")
+        cmd_render(a[1], a[2], style, opt.get("--accent"), opt.get("--hook"))
     else:
         raise SystemExit(__doc__)

@@ -35,6 +35,11 @@ class T(unittest.TestCase):
     def test_captions(self):
         g = br.caption_groups(W, 2.0)
         self.assertEqual([x["text"] for x in g], ["IT'S IT'S GREAT", "BUY NOW"])
+        self.assertEqual(g[0]["hl"], [2])                                   # "great": longest non-filler word
+        n = br.caption_groups(W, 2.0, max_words=7, max_chars=32, upper=False)
+        self.assertEqual(n[0]["text"], "It's it's great")
+        flagged = [dict(w, hl=(w["i"] == 3)) for w in W]
+        self.assertEqual(br.caption_groups(flagged, 2.0)[1]["hl"], [0])     # Claude's "hl": true wins
 
 class Keeps(unittest.TestCase):
     def test_pauses_shrink_and_drops_go(self):

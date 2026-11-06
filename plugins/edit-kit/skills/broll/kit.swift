@@ -1,7 +1,7 @@
 // Edit Kit native helper (macOS frameworks only, no installs).
 //   kit mask IN.mp4 W H        -> raw gray8 person mask frames on stdout (pipe into ffmpeg)
 //   kit focus CLIP.mp4 SEC     -> "x y w h" (0..1, top-left origin) of what the eye goes to in that frame
-//   kit captions JOB.json DIR  -> one transparent PNG per caption, all the same size: [{"text","file","w","h","size"}]
+//   kit captions JOB.json DIR  -> one transparent PNG per caption, all the same size (style fields: see struct Cap)
 import AVFoundation
 import AppKit
 import CoreImage
@@ -43,28 +43,98 @@ func focus(_ path: String, _ sec: Double) {
     print(String(format: "%.3f %.3f %.3f %.3f", u.minX, 1 - u.maxY, u.width, u.height))   // Vision is bottom-left origin
 }
 
-struct Cap: Decodable { let text: String; let file: String; let w: Int; let h: Int; let size: Double }
+struct Cap: Decodable {
+    let text: String; let file: String; let w: Int; let h: Int
+    let font: String; let size: Double; let color: String
+    let stroke: String?; let strokeW: Double?          // outline colour + width (% of font size)
+    let shadow: Bool?                                   // soft drop shadow
+    let box: String?; let radius: Double?               // rounded box behind each line (TikTok text bubble)
+    let hl: [Int]?; let hlColor: String?; let hlMode: String?   // highlighted word indices, "box" or "text"
+}
+
+func hex(_ s: String) -> NSColor {
+    var v: UInt64 = 0; Scanner(string: s.replacingOccurrences(of: "#", with: "")).scanHexInt64(&v)
+    return NSColor(srgbRed: CGFloat((v >> 16) & 255) / 255, green: CGFloat((v >> 8) & 255) / 255, blue: CGFloat(v & 255) / 255, alpha: 1)
+}
+
+func font(_ name: String, _ size: Double) -> NSFont {
+    if name == "serif", let d = NSFont.systemFont(ofSize: size, weight: .medium).fontDescriptor.withDesign(.serif) {
+        return NSFont(descriptor: d, size: size)!
+    }
+    return NSFont(name: name, size: size) ?? NSFont.systemFont(ofSize: size, weight: .heavy)
+}
 
 func captions(_ jsonPath: String, _ dir: String) {
     guard let data = FileManager.default.contents(atPath: jsonPath),
           let caps = try? JSONDecoder().decode([Cap].self, from: data) else { fail("bad \(jsonPath)") }
     for c in caps {
-        let font = NSFont(name: "SFProDisplay-Black", size: c.size) ?? NSFont.systemFont(ofSize: c.size, weight: .black)
-        let para = NSMutableParagraphStyle(); para.alignment = .center
-        let fill: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white, .paragraphStyle: para]
-        var stroke = fill; stroke[.foregroundColor] = NSColor.black
-        stroke[.strokeColor] = NSColor.black; stroke[.strokeWidth] = 30.0   // outline drawn under the fill
-        let s = NSAttributedString(string: c.text, attributes: fill)
-        let h = c.h, th = ceil(s.boundingRect(with: NSSize(width: CGFloat(c.w) - 40, height: 2000), options: [.usesLineFragmentOrigin]).height)
-        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: c.w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                                   isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        let W = c.w, H = c.h, pad: CGFloat = 40
+        let para = NSMutableParagraphStyle(); para.alignment = .center; para.lineHeightMultiple = 0.95
+        let base: [NSAttributedString.Key: Any] = [.font: font(c.font, c.size), .foregroundColor: hex(c.color), .paragraphStyle: para]
+        let storage = NSTextStorage(string: c.text, attributes: base)
+        // word index -> character range (for highlights)
+        var ranges: [NSRange] = []
+        let ns = c.text as NSString
+        ns.enumerateSubstrings(in: NSRange(location: 0, length: ns.length), options: .byWords) { _, r, _, _ in ranges.append(r) }
+        let hl = (c.hl ?? []).filter { $0 < ranges.count }.map { ranges[$0] }
+        if c.hlMode == "text", let col = c.hlColor { for r in hl { storage.addAttribute(.foregroundColor, value: hex(col), range: r) } }
+        if c.hlMode != "text", let col = c.hlColor {                          // dark word on a light block, white on a dark one
+            let k = hex(col).usingColorSpace(.sRGB)!
+            let light = 0.2126 * k.redComponent + 0.7152 * k.greenComponent + 0.0722 * k.blueComponent > 0.6
+            for r in hl { storage.addAttribute(.foregroundColor, value: light ? hex("#111111") : NSColor.white, range: r) }
+        }
+        let lm = NSLayoutManager(), tc = NSTextContainer(size: NSSize(width: CGFloat(W) - 2 * pad, height: 4000))
+        tc.lineFragmentPadding = 0; lm.addTextContainer(tc); storage.addLayoutManager(lm)
+        let used = lm.usedRect(for: tc)
+        let origin = NSPoint(x: pad, y: (CGFloat(H) - used.height) / 2)
+
+        let cg = CGContext(data: nil, width: W, height: H, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        cg.translateBy(x: 0, y: CGFloat(H)); cg.scaleBy(x: 1, y: -1)            // top-left origin, like the layout manager
         NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-        let r = NSRect(x: 20, y: (CGFloat(h) - th) / 2, width: CGFloat(c.w) - 40, height: th)   // vertically centred
-        NSAttributedString(string: c.text, attributes: stroke).draw(with: r, options: [.usesLineFragmentOrigin])
-        s.draw(with: r, options: [.usesLineFragmentOrigin])
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: cg, flipped: true)
+        let all = lm.glyphRange(for: tc)
+        let fs = CGFloat(c.size)
+        if let b = c.box {                                                     // one rounded box per line
+            hex(b).setFill()
+            lm.enumerateLineFragments(forGlyphRange: all) { _, usedLine, _, _, _ in
+                let r = usedLine.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -fs * 0.35, dy: -fs * 0.08)
+                NSBezierPath(roundedRect: r, xRadius: CGFloat(c.radius ?? 12), yRadius: CGFloat(c.radius ?? 12)).fill()
+            }
+        }
+        if c.hlMode != "text", let col = c.hlColor {                          // coloured box behind the key word
+            hex(col).setFill()
+            for r in hl {
+                let g = lm.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+                // tight per-word rect: x from glyph positions, y from the line fragment
+                let line = lm.lineFragmentRect(forGlyphAt: g.location, effectiveRange: nil)     // glyph x is relative to this
+                let usedLine = lm.lineFragmentUsedRect(forGlyphAt: g.location, effectiveRange: nil)
+                let x0 = line.minX + lm.location(forGlyphAt: g.location).x
+                let endG = NSMaxRange(g)
+                let x1 = endG < lm.numberOfGlyphs && lm.lineFragmentRect(forGlyphAt: endG, effectiveRange: nil).minY == line.minY
+                    ? line.minX + lm.location(forGlyphAt: endG).x : usedLine.maxX
+                let rect = NSRect(x: x0, y: line.minY, width: x1 - x0, height: line.height)
+                    .offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -fs * 0.12, dy: -fs * 0.02)
+                NSBezierPath(roundedRect: rect, xRadius: fs * 0.12, yRadius: fs * 0.12).fill()
+            }
+        }
+        if let st = c.stroke {                                                 // outline pass under the fill
+            let full = NSRange(location: 0, length: storage.length)
+            let saved = storage.attributedSubstring(from: full)
+            storage.addAttributes([.strokeColor: hex(st), .strokeWidth: c.strokeW ?? 8, .foregroundColor: hex(st)], range: full)
+            if c.hlMode != "text" && c.hlColor != nil { for r in hl { storage.addAttributes([.strokeWidth: 0, .foregroundColor: NSColor.clear], range: r) } }
+            lm.drawGlyphs(forGlyphRange: all, at: origin)
+            storage.setAttributedString(saved)
+        }
+        if c.shadow == true {
+            let sh = NSShadow(); sh.shadowColor = NSColor.black.withAlphaComponent(0.75)
+            sh.shadowBlurRadius = fs * 0.18; sh.shadowOffset = NSSize(width: 0, height: -fs * 0.04)
+            storage.addAttribute(.shadow, value: sh, range: NSRange(location: 0, length: storage.length))
+        }
+        lm.drawGlyphs(forGlyphRange: all, at: origin)
         NSGraphicsContext.restoreGraphicsState()
-        try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: dir + "/" + c.file))
+        let dest = CGImageDestinationCreateWithURL(URL(fileURLWithPath: dir + "/" + c.file) as CFURL, "public.png" as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, cg.makeImage()!, nil); CGImageDestinationFinalize(dest)
     }
 }
 

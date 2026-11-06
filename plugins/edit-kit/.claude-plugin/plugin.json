@@ -1,6 +1,6 @@
 {
   "name": "edit-kit",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Agentic Editing Kit: sets up an editing workspace, turns a raw talking head into a tight rough cut and places b-roll on the right words. Pair with aditor-kit for QC and AutoReview.",
   "author": { "name": "Aditor" },
   "license": "MIT"

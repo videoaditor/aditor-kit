@@ -1,11 +1,18 @@
 {
   "name": "aditor",
-  "owner": { "name": "Aditor" },
+  "owner": {
+    "name": "Aditor"
+  },
   "plugins": [
     {
       "name": "aditor-kit",
       "source": "./plugins/aditor-kit",
       "description": "AI Builder Starter Kit: sub-agent orchestration, nightshifts, a promise loop, AutoReview delivery with reel QC, and auto-learning: every correction becomes a rule in CLAUDE.md."
+    },
+    {
+      "name": "edit-kit",
+      "source": "./plugins/edit-kit",
+      "description": "Agentic Editing Kit: one-step editing workspace, rough cut from the transcript (false starts, null sentences, pauses), b-roll placed on the right words. Use with aditor-kit for QC and AutoReview."
     }
   ]
 }

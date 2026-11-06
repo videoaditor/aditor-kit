@@ -37,9 +37,9 @@ For video editors. Drop raw footage into Claude Code, get a tight rough cut with
 
 | Piece | What it does |
 |---|---|
-| `edit-setup` | Say "set up my workspace". Installs ffmpeg, whisper-cpp and the speech model, creates `~/aditor-edits/` with the house editing rules, checks the Gen connection. |
+| `edit-setup` | Say "set up my workspace". Installs ffmpeg, whisper-cpp and the speech model, creates `~/aditor-edits/` with the house editing rules and an `sfx/` folder for your sound pack, checks the Gen connection. |
 | `rough-cut` | Drag in a raw talking head, say "cut this". Claude reads the word-level transcript, removes false starts, stutters, retakes and empty sentences, shrinks every pause, speeds up 1.15× (lessons 1.1×), normalises to −14 LUFS, then re-transcribes the result to prove nothing doubled is left. |
-| `broll` | Drag in a folder of clips, say "put b-roll on it". Claude looks at every clip, places each on the words it matches, renders full-frame at 1080×1920/30 fps with the voice untouched. |
+| `broll` | Drag in a folder of clips (and the script), say "finish it". Claude looks at every clip and builds the edit on the words: full b-roll, split screen, before/after, the speaker cut out over b-roll and placed clear of what matters in the shot. Adds captions (SF Pro, proofread) and sound effects from your own SFX folder. Every shot ≥ 1 s, 1080×1920/30 fps, −14 LUFS. |
 
 QC (`reel-qc`) and delivery (`autoreview`) come from `aditor-kit`, so install both:
 

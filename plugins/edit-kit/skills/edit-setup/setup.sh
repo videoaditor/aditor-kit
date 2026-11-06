@@ -31,9 +31,15 @@ else
     && echo "OK    whisper model (downloaded)" || { echo "FAIL  model download: $MODEL_URL"; exit 1; }
 fi
 
-mkdir -p "$WS/inbox" "$WS/jobs"
+mkdir -p "$WS/inbox" "$WS/jobs" "$WS/sfx"
 [ -f "$WS/CLAUDE.md" ] && echo "OK    workspace $WS (kept existing CLAUDE.md)" \
   || { cp "$HERE/workspace-CLAUDE.md" "$WS/CLAUDE.md" && echo "OK    workspace $WS"; }
+
+if [ -n "$(ls -A "$WS/sfx" 2>/dev/null)" ]; then echo "OK    sfx library"
+else echo "TODO  sfx: drop your SFX pack into $WS/sfx (one folder per kind: Whooshes, Hits, Pops, Risers ...)"
+fi
+
+xcrun --find swiftc >/dev/null 2>&1 && echo "OK    swift (cutouts, captions)" || echo "TODO  run: xcode-select --install (needed for cutouts and captions)"
 
 if command -v claude >/dev/null && claude mcp list 2>/dev/null | grep -q '^gen'; then echo "OK    gen connected"
 else echo "TODO  gen not connected (optional): gen.aditor.ai → Connect Claude → copy the command → paste it in a terminal"

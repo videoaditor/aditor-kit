@@ -21,12 +21,20 @@ class T(unittest.TestCase):
         self.assertEqual(rc.drop_spans(W, "0, 3-4"), [(0.0, 0.3), (1.2, 1.8)])
         with self.assertRaises(SystemExit): rc.drop_spans(W, "4-9")
     def test_plan(self):
-        inv = {"01": {"path": "a", "dur": 2.0}, "02": {"path": "b", "dur": 0.4}}
-        p = br.plan([{"clip": "01", "from": 3, "to": 4}], W, inv, 2.0)
-        self.assertAlmostEqual(p[0]["at"], 1.2); self.assertAlmostEqual(p[0]["dur"], 0.6)
-        with self.assertRaises(SystemExit): br.plan([{"clip": "02", "from": 3, "to": 4}], W, inv, 2.0)  # too short
-        with self.assertRaises(SystemExit):
-            br.plan([{"clip": "01", "from": 0, "to": 2}, {"clip": "01", "from": 2, "to": 3}], W, inv, 2.0)  # overlap
+        inv = {"01": {"path": "a", "dur": 2.0}, "02": {"path": "b", "dur": 0.4}, "03": {"path": "c", "dur": 3.0}}
+        shots, _ = br.plan([{"clip": "01", "from": 3, "to": 4}], W, inv, 2.4)
+        self.assertAlmostEqual(shots[0]["at"], 1.2); self.assertAlmostEqual(shots[0]["dur"], 1.2)  # runs to the end
+        with self.assertRaises(SystemExit): br.plan([{"clip": "02", "from": 3, "to": 4}], W, inv, 2.4)   # clip too short
+        with self.assertRaises(SystemExit): br.plan([{"clip": "01", "from": 0, "to": 0}], W, inv, 2.4)   # 0.3 s < 1 s
+        with self.assertRaises(SystemExit): br.plan([{"clip": "01", "from": 3, "to": 4, "layout": "pip"}], W, inv, 2.4)
+    def test_plan_closes_speaker_flash(self):
+        words = [{"i": k, "w": "w", "t": k * 0.5, "d": 0.4} for k in range(12)]
+        inv = {"03": {"path": "c", "dur": 3.0}}
+        shots, notes = br.plan([{"clip": "03", "from": 0, "to": 2}, {"clip": "03", "from": 4, "to": 7}], words, inv, 6.0)
+        self.assertAlmostEqual(shots[0]["end"], shots[1]["at"]); self.assertEqual(len(notes), 1)
+    def test_captions(self):
+        g = br.caption_groups(W, 2.0)
+        self.assertEqual([x["text"] for x in g], ["IT'S IT'S GREAT", "BUY NOW"])
 
 class Keeps(unittest.TestCase):
     def test_pauses_shrink_and_drops_go(self):

@@ -6,6 +6,11 @@
       "name": "aditor-kit",
       "source": "./plugins/aditor-kit",
       "description": "AI Builder Starter Kit: sub-agent orchestration, nightshifts, a promise loop, AutoReview delivery with reel QC, and auto-learning: every correction becomes a rule in CLAUDE.md."
+    },
+    {
+      "name": "edit-kit",
+      "source": "./plugins/edit-kit",
+      "description": "Agentic Editing Kit, loaded from Gen: workspace setup, rough cut and b-roll finishing with Aditor's house rules. Needs a Gen account."
     }
   ]
 }

@@ -1,0 +1,7 @@
+{
+  "name": "edit-kit",
+  "version": "2.0.0",
+  "description": "Agentic Editing Kit, loaded from Gen: sets up an editing workspace, cuts a raw talking head and finishes it with b-roll, captions and SFX. Needs a Gen account (gen.aditor.ai).",
+  "author": { "name": "Aditor" },
+  "license": "MIT"
+}
